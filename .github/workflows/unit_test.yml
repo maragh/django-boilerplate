@@ -2,7 +2,7 @@ name: Unit Test
 
 on:
   pull_request:
-    branches: ['main', 'develop']
+    branches: ['main', 'feature']
 
 env:
   DJANGO_SETTINGS_MODULE: config.settings
