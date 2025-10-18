@@ -1,0 +1,60 @@
+services:
+  service-cache-1:
+    image: redis
+    ports:
+      - '6379:6379'
+  service-database-1:
+    image: postgres
+    restart: always
+    user: postgres
+    volumes:
+      - service-db-1:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=iprint
+      - POSTGRES_PASSWORD=password321
+    expose:
+      - 5432
+    ports:
+      - '5432:5432'
+    healthcheck:
+      test: ["CMD", "pg_isready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  service-server-1:
+    build:
+      context: .
+    command: ['python', 'manage.py', 'runserver', '0.0.0.0:8000']
+    entrypoint: 'sh entrypoint/migration.sh'
+    volumes:
+      - ./:/app
+    ports:
+      - '8000:8000'
+    environment:
+      - DATABASE_URL=psql://postgres:password321@service-database-1/iprint
+      - REDIS_URL=redis://service-cache-1:6379/0
+      - CELERY_BROKER_URL=redis://service-cache-1:6379/0
+    depends_on:
+      - service-database-1
+      - service-cache-1
+    env_file:
+      - '.env'
+  service-worker-1:
+    build:
+      context: .
+    command: ['celery', '-A', 'config', 'worker', '-B', '-l', 'INFO', '-E']
+    healthcheck:
+      test: ['CMD-SHELL', 'celery', '-A', 'config', 'inspect', 'ping', '-d', 'celery@{HOSTNAME}', '||', 'exit 1']
+    environment:
+      - DATABASE_URL=psql://postgres:password321@service-database-1/iprint
+      - REDIS_URL=redis://service-cache-1:6379/0
+      - CELERY_BROKER_URL=redis://service-cache-1:6379/0
+    depends_on:
+      - service-database-1
+      - service-cache-1
+      - service-server-1
+    env_file:
+      - '.env'
+volumes:
+  service-db-1:
+  service-cache-1:
